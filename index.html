@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en" class="dark scroll-smooth" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0A0A0A" />
+    <title>FrameVerse • Yashu | Cinematic Studio & Directorial Portfolio</title>
+    <meta name="description" content="FrameVerse - High-end Directorial and Cinematography Showcase by Yashu. Commercials, music videos, narrative cinema, and visual effects." />
+    
+    <!-- Synchronous theme setup before DOM paint to prevent flash -->
+    <script>
+      (function() {
+        try {
+          var saved = localStorage.getItem('frameverse_theme');
+          var theme = (saved === 'light') ? 'light' : 'dark';
+          if (theme === 'dark') {
+            document.documentElement.classList.add('dark');
+            document.documentElement.setAttribute('data-theme', 'dark');
+            document.documentElement.style.colorScheme = 'dark';
+          } else {
+            document.documentElement.classList.remove('dark');
+            document.documentElement.setAttribute('data-theme', 'light');
+            document.documentElement.style.colorScheme = 'light';
+          }
+        } catch (e) {
+          document.documentElement.classList.add('dark');
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+      })();
+    </script>
+
+    <!-- Google Fonts: Plus Jakarta Sans & Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  </head>
+  <body class="bg-[#FFFFFF] dark:bg-[#0A0A0A] text-[#171717] dark:text-[#FAFAFA] font-sans antialiased min-h-screen selection:bg-[#FF6B4A] selection:text-white dark:selection:text-[#0A0A0A] transition-colors duration-300">
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
