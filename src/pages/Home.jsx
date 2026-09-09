@@ -17,7 +17,9 @@ import Modal from '../components/common/Modal';
 import HeroCinematicVisual from '../components/common/HeroCinematicVisual';
 import VideoPlayer from '../components/common/VideoPlayer';
 import { projectService } from '../lib/supabase';
-import { formatViews } from '../lib/utils';
+import { formatViews, getYouTubeThumbnail } from '../lib/utils';
+
+const DEFAULT_LATEST_THUMB = 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=1200&q=80';
 
 export default function Home() {
   const [projects, setProjects] = useState([]);
@@ -42,8 +44,8 @@ export default function Home() {
 
   // Latest Reel showcase (the most recently added project/video from database)
   const latestReel = projects[0];
-  // Recent productions excluding the latest reel to avoid visual duplication
-  const recentProjects = projects.filter((p) => p.id !== latestReel?.id).slice(0, 6);
+  // Recent productions - ensure newly uploaded videos are visible in the grid across mobile & desktop
+  const recentProjects = projects.slice(0, 6);
 
   // Calculate live total views across all projects
   const totalViews = projects.reduce((acc, p) => acc + (Number(p.views) || 0), 0);
@@ -187,8 +189,15 @@ export default function Home() {
               {/* Media preview */}
               <div className="lg:col-span-8 relative aspect-video overflow-hidden bg-[#0A0A0A]">
                 <img
-                  src={latestReel.thumbnail_url}
+                  src={
+                    (latestReel.thumbnail_url && latestReel.thumbnail_url.trim()) ||
+                    getYouTubeThumbnail(latestReel.video_url) ||
+                    DEFAULT_LATEST_THUMB
+                  }
                   alt={latestReel.title}
+                  onError={(e) => {
+                    e.currentTarget.src = DEFAULT_LATEST_THUMB;
+                  }}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-[#0A0A0A]/90 via-[#0A0A0A]/20 to-transparent" />

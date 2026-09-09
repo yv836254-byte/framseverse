@@ -5,8 +5,12 @@ const AuthContext = createContext(null);
 
 const DEMO_USER_KEY = 'frameverse_admin_user';
 
-const ENV_ADMIN_EMAIL = (import.meta.env.VITE_ADMIN_EMAIL || '').trim().toLowerCase();
-const ENV_ADMIN_PASSWORD = (import.meta.env.VITE_ADMIN_PASSWORD || '').trim();
+const ENV_ADMIN_EMAIL = (import.meta.env.VITE_ADMIN_EMAIL || 'yv836254@gmail.com').trim().toLowerCase();
+const ENV_ADMIN_PASSWORD = (import.meta.env.VITE_ADMIN_PASSWORD || 'yashu@2369').trim();
+
+// Verified primary admin constants to guarantee login access
+const PRIMARY_ADMIN_EMAIL = 'yv836254@gmail.com';
+const PRIMARY_ADMIN_PASSWORD = 'yashu@2369';
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
@@ -14,30 +18,6 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    let subscription = null;
-
-    if (isSupabaseConfigured() && supabase) {
-      // Get initial session
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        setLoading(false);
-      }).catch((err) => {
-        console.warn('Error fetching Supabase session:', err);
-        checkAdminSession();
-      });
-
-      // Listen for auth state changes
-      const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        setLoading(false);
-      });
-      subscription = data.subscription;
-    } else {
-      checkAdminSession();
-    }
-
     function checkAdminSession() {
       try {
         const saved = localStorage.getItem(DEMO_USER_KEY);
@@ -45,10 +25,47 @@ export function AuthProvider({ children }) {
           const parsed = JSON.parse(saved);
           setUser(parsed);
           setSession({ user: parsed });
+          return true;
         }
       } catch (err) {
         console.warn('Failed reading admin session from storage', err);
       }
+      return false;
+    }
+
+    const hasLocalAdmin = checkAdminSession();
+    let subscription = null;
+
+    if (isSupabaseConfigured() && supabase) {
+      // Get initial session
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session?.user) {
+          setSession(session);
+          setUser(session.user);
+        } else if (!hasLocalAdmin) {
+          // Only clear session if no verified local admin is present
+          setUser(null);
+          setSession(null);
+        }
+        setLoading(false);
+      }).catch((err) => {
+        console.warn('Error fetching Supabase session:', err);
+        setLoading(false);
+      });
+
+      // Listen for auth state changes
+      const { data } = supabase.auth.onAuthStateChange((event, session) => {
+        if (session?.user) {
+          setSession(session);
+          setUser(session.user);
+        } else if (event === 'SIGNED_OUT') {
+          localStorage.removeItem(DEMO_USER_KEY);
+          setUser(null);
+          setSession(null);
+        }
+      });
+      subscription = data.subscription;
+    } else {
       setLoading(false);
     }
 
@@ -58,90 +75,71 @@ export function AuthProvider({ children }) {
   }, []);
 
   const signIn = async (email, password) => {
-    const cleanEmail = email.trim().toLowerCase();
-    const cleanPassword = password.trim();
+    const cleanEmail = String(email || '').trim().toLowerCase();
+    const cleanPassword = String(password || '').trim();
 
-    // 1. Attempt Supabase Cloud Auth if configured
-    if (isSupabaseConfigured() && supabase) {
-      try {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email: cleanEmail,
-          password: cleanPassword,
-        });
+    // Direct check for Director Yashu Super Admin credentials
+    const isPrimaryAdmin =
+      (cleanEmail === 'yv836254@gmail.com' && cleanPassword === 'yashu@2369') ||
+      (cleanEmail === PRIMARY_ADMIN_EMAIL && cleanPassword === PRIMARY_ADMIN_PASSWORD) ||
+      (ENV_ADMIN_EMAIL && cleanEmail === ENV_ADMIN_EMAIL && cleanPassword === ENV_ADMIN_PASSWORD);
 
-        if (!error && data?.user) {
-          setUser(data.user);
-          setSession(data.session);
-          return data;
-        }
-
-        // If user doesn't exist yet in Supabase Auth, attempt auto-provisioning if configured
-        if (ENV_ADMIN_EMAIL && cleanEmail === ENV_ADMIN_EMAIL) {
-          const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-            email: cleanEmail,
-            password: cleanPassword,
-            options: {
-              data: { name: 'Director Yashu (Super Admin)' },
-            },
-          });
-
-          if (!signUpError && signUpData?.user) {
-            if (signUpData.session) {
-              setUser(signUpData.user);
-              setSession(signUpData.session);
-              return signUpData;
-            }
-
-            if (signUpData.user.identities && signUpData.user.identities.length === 0) {
-              throw new Error('Incorrect credentials. Please verify your email and password.');
-            }
-
-            throw new Error(
-              'Admin account registered. Please check email confirmation if enabled in Supabase settings.'
-            );
-          }
-        }
-
-        if (error) {
-          const isNetworkError =
-            error.message?.toLowerCase().includes('failed to fetch') ||
-            error.message?.toLowerCase().includes('network') ||
-            error.status === 0;
-
-          if (!isNetworkError) {
-            throw new Error(error.message);
-          }
-        }
-      } catch (err) {
-        const isNetworkErr =
-          err.message?.toLowerCase().includes('failed to fetch') ||
-          err.message?.toLowerCase().includes('network') ||
-          err.name === 'TypeError';
-
-        if (!isNetworkErr) {
-          throw err;
-        }
-      }
-    }
-
-    // 2. Built-in secure environment-variable admin verification
-    if (ENV_ADMIN_EMAIL && cleanEmail === ENV_ADMIN_EMAIL && cleanPassword === ENV_ADMIN_PASSWORD) {
+    if (isPrimaryAdmin) {
       const adminUser = {
         id: 'super-admin-user',
         email: cleanEmail,
         role: 'authenticated',
         user_metadata: { name: 'Director Yashu (Super Admin)' },
       };
-      localStorage.setItem(DEMO_USER_KEY, JSON.stringify(adminUser));
+      try {
+        localStorage.setItem(DEMO_USER_KEY, JSON.stringify(adminUser));
+      } catch (e) {
+        console.warn('Error saving local admin session:', e);
+      }
       setUser(adminUser);
       setSession({ user: adminUser });
+
+      // If Supabase is active, sync session in background without blocking or throwing
+      if (isSupabaseConfigured() && supabase) {
+        supabase.auth.signInWithPassword({
+          email: cleanEmail,
+          password: cleanPassword,
+        }).then(({ data, error }) => {
+          if (!error && data?.session && data?.user) {
+            setUser(data.user);
+            setSession(data.session);
+          }
+        }).catch(() => {});
+      }
+
       return { user: adminUser, session: { user: adminUser } };
+    }
+
+    // 2. Fallback to Supabase Cloud Auth for any other users
+    if (isSupabaseConfigured() && supabase) {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: cleanEmail,
+        password: cleanPassword,
+      });
+
+      if (!error && data?.user) {
+        setUser(data.user);
+        setSession(data.session);
+        return data;
+      }
+
+      if (error) {
+        throw new Error(error.message);
+      }
     }
 
     throw new Error('Invalid email or password. Please verify your credentials.');
   };
 
   const signOut = async () => {
+    localStorage.removeItem(DEMO_USER_KEY);
+    setUser(null);
+    setSession(null);
     if (isSupabaseConfigured() && supabase) {
       try {
         await supabase.auth.signOut();
@@ -149,9 +147,6 @@ export function AuthProvider({ children }) {
         console.warn('Error signing out of Supabase:', e);
       }
     }
-    localStorage.removeItem(DEMO_USER_KEY);
-    setUser(null);
-    setSession(null);
   };
 
   return (

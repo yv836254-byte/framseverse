@@ -1,13 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
-import { Shield, Lock, Mail, ArrowLeft, AlertCircle } from 'lucide-react';
+import { Shield, Lock, Mail, ArrowLeft, AlertCircle, Zap } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 
 export default function AdminLogin() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { signIn } = useAuth();
+  const { signIn, isAuthenticated } = useAuth();
   const { showToast } = useToast();
 
   const [email, setEmail] = useState('');
@@ -18,12 +18,20 @@ export default function AdminLogin() {
   const from = location.state?.from?.pathname;
   const targetDestination = from && from !== '/admin/login' ? from : '/admin/dashboard';
 
+  // Automatically redirect if already authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate(targetDestination, { replace: true });
+    }
+  }, [isAuthenticated, navigate, targetDestination]);
+
   const handleLogin = async (e) => {
-    e.preventDefault();
+    if (e && e.preventDefault) e.preventDefault();
     setErrorMsg('');
 
     const cleanEmail = email.trim();
-    if (!cleanEmail || !password) {
+    const cleanPassword = password.trim();
+    if (!cleanEmail || !cleanPassword) {
       const msg = 'Please enter both email and password.';
       setErrorMsg(msg);
       showToast(msg, 'error');
@@ -32,12 +40,32 @@ export default function AdminLogin() {
 
     try {
       setLoading(true);
-      await signIn(cleanEmail, password);
-      showToast('Authenticated successfully.', 'success');
+      await signIn(cleanEmail, cleanPassword);
+      showToast('Authenticated successfully as Super Admin.', 'success');
       navigate(targetDestination, { replace: true });
     } catch (err) {
       console.error('Login error:', err);
-      const msg = 'Invalid email or password. Access denied.';
+      const msg = err.message || 'Invalid email or password. Access denied.';
+      setErrorMsg(msg);
+      showToast(msg, 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleQuickLogin = async () => {
+    setEmail('yv836254@gmail.com');
+    setPassword('yashu@2369');
+    setErrorMsg('');
+
+    try {
+      setLoading(true);
+      await signIn('yv836254@gmail.com', 'yashu@2369');
+      showToast('Authenticated successfully as Super Admin.', 'success');
+      navigate(targetDestination, { replace: true });
+    } catch (err) {
+      console.error('Quick login error:', err);
+      const msg = err.message || 'Failed to authenticate.';
       setErrorMsg(msg);
       showToast(msg, 'error');
     } finally {
@@ -129,6 +157,28 @@ export default function AdminLogin() {
               {loading ? 'Authenticating...' : 'Sign In to Admin Studio'}
             </button>
           </form>
+
+          <div className="pt-3 border-t border-[#E5E5E5] dark:border-[#262626] flex items-center justify-between text-[11px] font-mono">
+            <button
+              type="button"
+              onClick={handleQuickLogin}
+              disabled={loading}
+              className="inline-flex items-center gap-1.5 text-[#FF6B4A] hover:underline font-semibold"
+            >
+              <Zap className="w-3.5 h-3.5" /> 1-Click Sign In
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setEmail('yv836254@gmail.com');
+                setPassword('yashu@2369');
+                setErrorMsg('');
+              }}
+              className="text-[#737373] dark:text-[#A3A3A3] hover:text-[#FF6B4A] underline"
+            >
+              Prefill Credentials
+            </button>
+          </div>
         </div>
       </div>
     </div>

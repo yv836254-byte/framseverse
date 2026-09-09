@@ -3,18 +3,18 @@ import { Link } from 'react-router-dom';
 import { Play, Eye, Clock, Sparkles, FileVideo } from 'lucide-react';
 import { formatViews, getYouTubeThumbnail } from '../../lib/utils';
 
+const DEFAULT_POSTER = 'https://images.unsplash.com/photo-1478760329108-5c3ed9d495a0?auto=format&fit=crop&w=800&q=80';
+
 export default function VideoCard({ project }) {
-  const [imgSrc, setImgSrc] = useState(
-    project.thumbnail_url || getYouTubeThumbnail(project.video_url)
-  );
+  const [hasError, setHasError] = useState(false);
+
+  const imgSrc =
+    (!hasError && project.thumbnail_url && project.thumbnail_url.trim()) ||
+    (!hasError && getYouTubeThumbnail(project.video_url)) ||
+    DEFAULT_POSTER;
 
   const handleImageError = () => {
-    const ytThumb = getYouTubeThumbnail(project.video_url);
-    if (imgSrc !== ytThumb) {
-      setImgSrc(ytThumb);
-    } else {
-      setImgSrc('https://images.unsplash.com/photo-1478760329108-5c3ed9d495a0?auto=format&fit=crop&w=800&q=80');
-    }
+    setHasError(true);
   };
 
   const isUploaded =

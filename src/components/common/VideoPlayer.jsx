@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Maximize, Minimize, AlertCircle, RotateCcw } from 'lucide-react';
 import VideoWatermark from './VideoWatermark';
 import { getYouTubeEmbedUrl } from '../../lib/utils';
+import { resolvePlaybackUrl } from '../../lib/videoStorage';
 
 /**
  * VideoPlayer
@@ -38,9 +39,27 @@ export default function VideoPlayer({
   const [isHovered, setIsHovered] = useState(false);
   const [intrinsicAspect, setIntrinsicAspect] = useState(null);
   const [contentBox, setContentBox] = useState(null);
+  const [playableSrc, setPlayableSrc] = useState(src);
 
   const isUploadedVideo = videoType === 'upload';
   const embedUrl = !isUploadedVideo && src ? getYouTubeEmbedUrl(src, { autoplay: autoPlay, fs: false }) : '';
+
+  // Asynchronously resolve playback URL (e.g. indexeddb:// or blob:)
+  useEffect(() => {
+    let isCancelled = false;
+    if (isUploadedVideo && src && (src.startsWith('indexeddb://') || src.startsWith('blob:'))) {
+      resolvePlaybackUrl(src)
+        .then((url) => {
+          if (!isCancelled && url) setPlayableSrc(url);
+        })
+        .catch(() => {
+          if (!isCancelled) setPlayableSrc(src);
+        });
+    }
+    return () => {
+      isCancelled = true;
+    };
+  }, [src, isUploadedVideo]);
 
   // Determine target aspect ratio for this video
   const getTargetAspect = useCallback(() => {
@@ -261,19 +280,21 @@ export default function VideoPlayer({
           >
             <video
               ref={videoRef}
-              src={src}
+              src={playableSrc}
               controls
               controlsList="nofullscreen nodownload"
               disablePictureInPicture
               playsInline
-              preload="auto"
+              webkit-playsinline="true"
+              preload="metadata"
               poster={poster}
               onContextMenu={(e) => e.preventDefault()}
               onLoadedMetadata={handleLoadedMetadata}
-              onLoadStart={() => setIsBuffering(true)}
+              onLoadedData={() => setIsBuffering(false)}
               onWaiting={() => setIsBuffering(true)}
               onSeeking={() => setIsBuffering(true)}
               onSeeked={() => setIsBuffering(false)}
+              onCanPlayThrough={() => setIsBuffering(false)}
               onCanPlay={() => {
                 setIsBuffering(false);
                 setVideoError(null);
@@ -289,6 +310,7 @@ export default function VideoPlayer({
                 onPlaying?.();
               }}
               onPause={() => {
+                setIsBuffering(false);
                 setIsPlaying(false);
                 setControlsVisible(true);
               }}
@@ -296,7 +318,7 @@ export default function VideoPlayer({
                 setIsBuffering(false);
                 setIsPlaying(false);
                 console.error('[VideoPlayer] Video stream error:', e);
-                setVideoError('Video file could not be played or buffer stalled.');
+                setVideoError('Video file could not be played. Please verify format (MP4/WebM) or check connection.');
               }}
               className="w-full h-full object-contain bg-[#000000]"
             >

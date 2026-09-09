@@ -18,6 +18,49 @@ import { getYouTubeEmbedUrl, getYouTubeThumbnail, parseTags } from '../../lib/ut
 import { useToast } from '../../context/ToastContext';
 import VideoPlayer from '../../components/common/VideoPlayer';
 
+const DEFAULT_VIDEO_POSTER = 'https://images.unsplash.com/photo-1478760329108-5c3ed9d495a0?auto=format&fit=crop&w=800&q=80';
+
+// Offscreen canvas frame extractor to auto-generate video poster thumbnail
+function extractVideoThumbnail(file) {
+  return new Promise((resolve) => {
+    try {
+      const video = document.createElement('video');
+      video.preload = 'metadata';
+      video.muted = true;
+      video.playsInline = true;
+      const objectUrl = URL.createObjectURL(file);
+      video.src = objectUrl;
+
+      video.onloadeddata = () => {
+        video.currentTime = Math.min(0.5, (video.duration || 1) / 2);
+      };
+
+      video.onseeked = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = video.videoWidth || 1280;
+          canvas.height = video.videoHeight || 720;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+          URL.revokeObjectURL(objectUrl);
+          resolve(dataUrl);
+        } catch {
+          URL.revokeObjectURL(objectUrl);
+          resolve(null);
+        }
+      };
+
+      video.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        resolve(null);
+      };
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
 export default function AdminProjectForm() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -153,6 +196,16 @@ export default function AdminProjectForm() {
     try {
       setUploadingVideo(true);
       showToast('Uploading video file to storage...', 'info');
+
+      // Auto-extract a cinematic video frame thumbnail if no thumbnail is set
+      if (!formData.thumbnail_url) {
+        extractVideoThumbnail(file).then((frameData) => {
+          if (frameData) {
+            setFormData((prev) => (prev.thumbnail_url ? prev : { ...prev, thumbnail_url: frameData }));
+          }
+        });
+      }
+
       const uploadedUrl = await projectService.uploadVideoFile(file);
       if (uploadedUrl) {
         setFormData((prev) => ({
@@ -185,7 +238,11 @@ export default function AdminProjectForm() {
       category: formData.category,
       video_type: formData.video_type,
       video_url: formData.video_url.trim(),
-      thumbnail_url: formData.thumbnail_url.trim() || (formData.video_type === 'youtube' ? getYouTubeThumbnail(formData.video_url) : ''),
+      thumbnail_url:
+        formData.thumbnail_url.trim() ||
+        (formData.video_type === 'youtube'
+          ? getYouTubeThumbnail(formData.video_url)
+          : DEFAULT_VIDEO_POSTER),
       description: formData.description.trim(),
       client: formData.client.trim(),
       role: formData.role.trim(),
